@@ -1,0 +1,6 @@
+{
+  "name": "NexusRoute AI",
+  "description": "Deep-tech autonomous network infrastructure and edge intelligence routing engine with real-time latency telemetry and self-healing topology planning.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
