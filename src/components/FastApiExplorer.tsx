@@ -45,30 +45,105 @@ export const FastApiExplorer: React.FC = () => {
     setTimeout(() => setCopied(false), 2500);
   };
 
-  const handleSimulateRequest = () => {
+  const handleSimulateRequest = async () => {
     setIsSending(true);
-    setTimeout(() => {
-      setIsSending(false);
-      const randomBatch = 'BATCH-' + Math.random().toString(36).substring(2, 9).toUpperCase();
-      const mockElapsed = Number((2.8 + Math.random() * 2.2).toFixed(1));
-      
-      setResponseLog({
-        status: 202,
-        statusText: 'Accepted',
-        responseTimeMs: mockElapsed,
-        body: {
-          status: 'accepted',
-          batch_id: randomBatch,
+    const t0 = performance.now();
+    try {
+      const records = Array.from({ length: batchSize }, (_, idx) => ({
+        node_id: `edge-node-${idx + 1}`,
+        ingress_gbps: Number((42 + Math.random() * 35).toFixed(1)),
+        egress_gbps: Number((38 + Math.random() * 30).toFixed(1)),
+        buffer_utilization_pct: Number((18 + Math.random() * 40).toFixed(1)),
+        cpu_utilization_pct: Number((22 + Math.random() * 25).toFixed(1)),
+        active_flows: Math.floor(450 + Math.random() * 900),
+      }));
+
+      const res = await fetch('/api/v1/telemetry/ingest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           cluster_id: clusterId,
-          records_received: batchSize,
           traffic_class: trafficClass,
-          processing_mode: 'asynchronous_pipeline_worker',
-          checksum_verified: true,
-          estimated_inference_latency_ms: Number((11.2 + Math.random() * 3).toFixed(1)),
-          timestamp: new Date().toISOString()
-        }
+          record_count: batchSize,
+          records,
+        }),
       });
-    }, 450);
+      const data = await res.json();
+      const roundTripMs = Number((performance.now() - t0).toFixed(1));
+
+      setResponseLog({
+        status: res.status,
+        statusText: res.status === 202 ? 'Accepted' : res.statusText,
+        responseTimeMs: roundTripMs,
+        body: data,
+      });
+    } catch {
+      setResponseLog({
+        status: 503,
+        statusText: 'Unavailable',
+        responseTimeMs: 0,
+        body: { error: 'Failed to reach backend ingestion service' },
+      });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleCheckLiveStatus = async () => {
+    setIsSending(true);
+    const t0 = performance.now();
+    try {
+      const res = await fetch('/api/v1/telemetry/status');
+      const data = await res.json();
+      setResponseLog({
+        status: res.status,
+        statusText: res.ok ? 'OK' : res.statusText,
+        responseTimeMs: Number((performance.now() - t0).toFixed(1)),
+        body: data,
+      });
+    } catch {
+      setResponseLog({
+        status: 503,
+        statusText: 'Unavailable',
+        responseTimeMs: 0,
+        body: { error: 'Failed to reach backend status endpoint' },
+      });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleTestOptimizeRoute = async () => {
+    setIsSending(true);
+    const t0 = performance.now();
+    try {
+      const res = await fetch('/api/v1/routes/optimize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          source_node: 'tok-01',
+          destination_node: 'fra-01',
+          traffic_class: trafficClass,
+          required_bandwidth_gbps: 25,
+        }),
+      });
+      const data = await res.json();
+      setResponseLog({
+        status: res.status,
+        statusText: res.ok ? 'OK' : res.statusText,
+        responseTimeMs: Number((performance.now() - t0).toFixed(1)),
+        body: data,
+      });
+    } catch {
+      setResponseLog({
+        status: 503,
+        statusText: 'Unavailable',
+        responseTimeMs: 0,
+        body: { error: 'Failed to reach route optimization endpoint' },
+      });
+    } finally {
+      setIsSending(false);
+    }
   };
 
   return (
@@ -240,6 +315,25 @@ export const FastApiExplorer: React.FC = () => {
                   </>
                 )}
               </button>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={handleCheckLiveStatus}
+                  disabled={isSending}
+                  className="py-2 px-3 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-700 text-emerald-300 font-mono text-[11px] font-semibold transition-colors"
+                >
+                  GET /telemetry/status
+                </button>
+                <button
+                  type="button"
+                  onClick={handleTestOptimizeRoute}
+                  disabled={isSending}
+                  className="py-2 px-3 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-700 text-purple-300 font-mono text-[11px] font-semibold transition-colors"
+                >
+                  POST /routes/optimize
+                </button>
+              </div>
             </div>
 
             {/* Right Live Response */}
